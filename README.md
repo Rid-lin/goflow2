@@ -156,6 +156,36 @@ To change the kafka compression type of the producer side configure the followin
 ```
 The list of codecs is available in the [Sarama documentation](https://pkg.go.dev/github.com/Shopify/sarama#CompressionCodec).
 
+### TimescaleDB/PostgreSQL
+
+To insert flow data directly into TimescaleDB or PostgreSQL, use the `timescaledb` transport:
+
+```bash
+$ ./goflow2 -transport=timescaledb \
+  -transport.timescaledb.conn="postgres://user:password@localhost:5432/dbname" \
+  -transport.timescaledb.table="flows" \
+  -transport.timescaledb.create-table=true \
+  -format=bin
+```
+
+The transport will automatically create a hypertable (if using TimescaleDB) or a regular table with appropriate schema. It supports batching for better performance with configurable batch size and timeout.
+
+Available options:
+- `-transport.timescaledb.conn`: PostgreSQL connection string
+- `-transport.timescaledb.table`: Table name (default: "flows")
+- `-transport.timescaledb.create-table`: Create table if missing (default: true)
+- `-transport.timescaledb.create-aggregation-tables`: Create aggregation tables for local IP traffic (default: true)
+- `-transport.timescaledb.chunk-interval`: Chunk time interval for hypertable partitioning (e.g., 1h, 1d) (default: 1h)
+- `-transport.timescaledb.batch-size`: Batch size for inserts (default: 1000)
+- `-transport.timescaledb.batch-timeout`: Maximum time to wait before flushing batch (default: 5s)
+- `-transport.timescaledb.max-connections`: Maximum database connections (default: 10)
+
+When `-transport.timescaledb.create-aggregation-tables` is enabled (default), two continuous aggregates are created: `flows_local_ip_outbound_hourly` and `flows_local_ip_inbound_hourly`. They aggregate traffic for local IP addresses (private ranges: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8, 169.254.0.0/16) by hour, separating incoming (destination) and outgoing (source) traffic. A unified view `flows_local_ip_hourly` combines both aggregates for easy querying. TimescaleDB's continuous aggregate policies automatically refresh the data hourly.
+
+The `-transport.timescaledb.chunk-interval` controls the time partitioning of the main hypertable (default 1 hour). Smaller intervals improve query performance for recent data but increase the number of chunks.
+
+Note: The `timescaledb` transport expects protobuf format (`-format=bin`).
+
 
 By default, the collector will listen for IPFIX/NetFlow V9/NetFlow V5 on port 2055
 and sFlow on port 6343.
