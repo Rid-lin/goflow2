@@ -280,12 +280,13 @@ func (d *TimescaleDBDriver) createAggregationTablesIfNotExists(conn *pgxpool.Con
 
 		-- Add continuous aggregate policies (refresh every hour, keep last 24 hours)
 		SELECT add_continuous_aggregate_policy('flows_local_ip_outbound_hourly',
-			start_offset => INTERVAL '24 hours',
+			start_offset => INTERVAL '365 days',
 			end_offset => INTERVAL '1 hour',
 			schedule_interval => INTERVAL '1 hour'
 		);
+
 		SELECT add_continuous_aggregate_policy('flows_local_ip_inbound_hourly',
-			start_offset => INTERVAL '24 hours',
+			start_offset => INTERVAL '365 days',
 			end_offset => INTERVAL '1 hour',
 			schedule_interval => INTERVAL '1 hour'
 		);
