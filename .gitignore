@@ -1,1 +1,3 @@
 dist/*
+.env
+launch.json

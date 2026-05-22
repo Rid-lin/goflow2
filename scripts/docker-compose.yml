@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  timescaledb:
+    image: ${TIMESCALEDB_IMAGE:-timescale/timescaledb:latest-pg16}
+    container_name: goflow2-timescaledb
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-goflow2}
+      POSTGRES_USER: ${DB_ADMIN_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_ADMIN_PASSWORD:-password}
+      TIMESCALEDB_TELEMETRY: ${TIMESCALEDB_TELEMETRY:-off}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - ./timescaledb-data:/var/lib/postgresql/data
+      - ./timescaledb/init:/docker-entrypoint-initdb.d
+    networks:
+      - goflow2-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_ADMIN_USER:-postgres} -d ${DB_NAME:-goflow2}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: >
+      postgres
+      -c shared_preload_libraries=timescaledb
+      -c max_connections=${TIMESCALEDB_MAX_CONNECTIONS:-200}
+      -c shared_buffers=${TIMESCALEDB_SHARED_BUFFERS:-256MB}
+
+networks:
+  goflow2-network:
+    driver: bridge

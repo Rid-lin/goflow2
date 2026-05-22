@@ -1,0 +1,63 @@
+services:
+  timescaledb:
+    image: ${TIMESCALEDB_IMAGE:-timescale/timescaledb:latest-pg16}
+    container_name: goflow2-timescaledb
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-goflow2}
+      POSTGRES_USER: ${DB_ADMIN_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_ADMIN_PASSWORD:-password}
+      # TimescaleDB specific tuning
+      TIMESCALEDB_TELEMETRY: ${TIMESCALEDB_TELEMETRY:-off}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - timescaledb-data:/var/lib/postgresql/data
+      # Optional: mount initialization scripts
+      - ./timescaledb/init:/docker-entrypoint-initdb.d
+    networks:
+      - goflow2-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_ADMIN_USER:-postgres} -d ${DB_NAME:-goflow2}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    # Performance tuning for TimescaleDB
+    command: >
+      postgres
+      -c shared_preload_libraries=timescaledb
+      -c max_connections=${TIMESCALEDB_MAX_CONNECTIONS:-200}
+      -c shared_buffers=${TIMESCALEDB_SHARED_BUFFERS:-256MB}
+      -c effective_cache_size=1GB
+      -c maintenance_work_mem=64MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+
+  # Optional: pgAdmin for database management
+  pgadmin:
+    image: ${PGADMIN_IMAGE:-dpage/pgadmin4:latest}
+    container_name: goflow2-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@goflow2.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+    ports:
+      - "${PGADMIN_PORT:-8080}:80"
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    networks:
+      - goflow2-network
+    depends_on:
+      - timescaledb
+
+volumes:
+  timescaledb-data:
+    driver: local
+  pgadmin-data:
+    driver: local
+
+networks:
+  goflow2-network:
+    driver: bridge
