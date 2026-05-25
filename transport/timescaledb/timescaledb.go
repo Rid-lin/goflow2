@@ -32,6 +32,8 @@ type TimescaleDBDriver struct {
 	batchSize               int
 	batchTimeout            time.Duration
 	maxConnections          int
+	enableCompression       bool
+	compressionAfter        time.Duration
 
 	pool   *pgxpool.Pool
 	batch  []*flowpb.FlowMessage
@@ -59,6 +61,10 @@ func (d *TimescaleDBDriver) Prepare() error {
 		"Maximum time to wait before flushing batch")
 	flag.IntVar(&d.maxConnections, "transport.timescaledb.max-connections", 10,
 		"Maximum number of database connections")
+	flag.BoolVar(&d.enableCompression, "transport.timescaledb.enable-compression", true,
+		"Enable TimescaleDB compression and indexes on the flows table")
+	flag.DurationVar(&d.compressionAfter, "transport.timescaledb.compression-after", 24*time.Hour*7,
+		"Compress data older than this interval (default 7 days)")
 	return nil
 }
 
@@ -228,10 +234,67 @@ func (d *TimescaleDBDriver) createTableIfNotExists() error {
 		}
 	}
 
+	// Apply compression and indexes if enabled
+	if err := d.applyCompressionAndIndexes(conn); err != nil {
+		// Log warning but don't fail table creation
+		slog.Warn("failed to apply compression and indexes", "error", err)
+	}
+
 	// Create aggregation tables if enabled
 	if d.createAggregationTables {
 		if err := d.createAggregationTablesIfNotExists(conn); err != nil {
 			return fmt.Errorf("create aggregation tables: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// applyCompressionAndIndexes enables TimescaleDB compression and creates indexes on the flows table.
+func (d *TimescaleDBDriver) applyCompressionAndIndexes(conn *pgxpool.Conn) error {
+	if !d.enableCompression {
+		return nil
+	}
+
+	// Enable compression with segmentby and orderby
+	compressQuery := fmt.Sprintf(`
+		ALTER TABLE %s SET (
+			timescaledb.compress,
+			timescaledb.compress_segmentby = 'sampler_address, in_if, out_if',
+			timescaledb.compress_orderby = 'time_received DESC, src_addr, dst_addr'
+		);
+	`, d.tableName)
+	_, err := conn.Exec(d.ctx, compressQuery)
+	if err != nil {
+		// Compression may not be supported (e.g., TimescaleDB not installed or version mismatch)
+		// We log but don't fail because compression is optional
+		slog.Warn("failed to enable TimescaleDB compression", "error", err)
+		// Continue to create indexes anyway
+	}
+
+	// Add compression policy (compress data older than compressionAfter)
+	// Convert duration to PostgreSQL interval
+	intervalSeconds := int64(d.compressionAfter.Seconds())
+	policyQuery := fmt.Sprintf(
+		`SELECT add_compression_policy('%s', INTERVAL '%d seconds');`,
+		d.tableName, intervalSeconds)
+	_, err = conn.Exec(d.ctx, policyQuery)
+	if err != nil {
+		slog.Warn("failed to add compression policy", "error", err)
+	}
+
+	// Create indexes
+	indexQueries := []string{
+		fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_src_addr ON %s (src_addr);", d.tableName),
+		fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_dst_addr ON %s (dst_addr);", d.tableName),
+		fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_src_addr_gist ON %s USING gist (src_addr inet_ops);", d.tableName),
+		fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_dst_addr_gist ON %s USING gist (dst_addr inet_ops);", d.tableName),
+	}
+
+	for _, q := range indexQueries {
+		_, err := conn.Exec(d.ctx, q)
+		if err != nil {
+			slog.Warn("failed to create index", "query", q, "error", err)
 		}
 	}
 
