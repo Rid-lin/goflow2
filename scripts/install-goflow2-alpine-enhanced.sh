@@ -438,12 +438,12 @@ service iptables save
 
 1. Подключитесь к контейнеру TimescaleDB:
    ```bash
-   docker exec -it goflow2-timescaledb psql -U postgres -d goflow2
+   docker exec -it goflow2-timescaledb vi /home/postgres/pgdata/data/pg_hba.conf
    ```
 
 2. Добавьте запись в `pg_hba.conf` для вашей подсети:
    ```bash
-   docker exec goflow2-timescaledb bash -c "echo 'host all all 192.168.1.0/24 md5' >> /var/lib/postgresql/data/pg_hba.conf"
+   docker exec goflow2-timescaledb bash -c "echo 'host all all 192.168.1.0/24 md5' >> /home/postgres/pgdata/data/pg_hba.conf"
    ```
    Замените `192.168.1.0/24` на IP-адрес или подсеть вашего сервера Grafana.
 
