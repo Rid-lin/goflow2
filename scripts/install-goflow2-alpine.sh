@@ -55,30 +55,39 @@ log_info "Detected architecture: $ARCH"
 
 # Install dependencies
 log_info "Installing required packages..."
-apk add --no-cache curl tar wget
+apk add --no-cache wget jq
 
-# Get latest release version from GitHub API
+# Get latest release version from GitHub API using jq
 log_info "Fetching latest release version..."
-LATEST_VERSION=$(curl -s https://api.github.com/repos/Rid-lin/goflow2/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-if [ -z "$LATEST_VERSION" ]; then
+LATEST_VERSION=$(wget -q -O - https://api.github.com/repos/Rid-lin/goflow2/releases/latest | jq -r '.tag_name')
+if [ -z "$LATEST_VERSION" ] || [ "$LATEST_VERSION" = "null" ]; then
     log_error "Failed to fetch latest version"
     exit 1
 fi
 log_info "Latest version: $LATEST_VERSION"
 
 # Construct download URL
-DOWNLOAD_URL="https://github.com/Rid-lin/goflow2/releases/download/${LATEST_VERSION}/goflow2_${LATEST_VERSION}_linux_${ARCH}.tar.gz"
+DOWNLOAD_URL="https://github.com/Rid-lin/goflow2/releases/download/${LATEST_VERSION}/goflow2"
 log_info "Download URL: $DOWNLOAD_URL"
 
 # Create installation directory
 log_info "Creating installation directory $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR"
 
-# Download and extract
+# Create user and group if they don't exist
+if ! getent group "$GROUP_NAME" > /dev/null; then
+    log_info "Creating group $GROUP_NAME..."
+    addgroup -S "$GROUP_NAME"
+fi
+if ! id -u "$USER_NAME" > /dev/null; then
+    log_info "Creating user $USER_NAME..."
+    adduser -S -D -H -G "$GROUP_NAME" -h "$INSTALL_DIR" -s /bin/false "$USER_NAME"
+fi
+
+# Download binary (file is not compressed, no extraction needed)
 log_info "Downloading goflow2..."
 cd /tmp
-curl -L -o goflow2.tar.gz "$DOWNLOAD_URL"
-tar -xzf goflow2.tar.gz
+wget -q -O goflow2 "$DOWNLOAD_URL"
 
 # Move binary to installation directory
 mv goflow2 "$INSTALL_DIR/"
@@ -101,16 +110,6 @@ exec "$(dirname "$0")/goflow2" "$@"
 EOF
 chmod +x "$WRAPPER_SCRIPT"
 chown "$USER_NAME:$GROUP_NAME" "$WRAPPER_SCRIPT"
-
-# Create user and group if they don't exist
-if ! getent group "$GROUP_NAME" > /dev/null; then
-    log_info "Creating group $GROUP_NAME..."
-    addgroup -S "$GROUP_NAME"
-fi
-if ! id -u "$USER_NAME" > /dev/null; then
-    log_info "Creating user $USER_NAME..."
-    adduser -S -D -H -G "$GROUP_NAME" -h "$INSTALL_DIR" -s /bin/false "$USER_NAME"
-fi
 
 # Set ownership
 log_info "Setting ownership of $INSTALL_DIR to $USER_NAME:$GROUP_NAME..."
@@ -158,6 +157,7 @@ start_pre() {
     if [ ! -f "$INSTALL_DIR/.env" ]; then
         ewarn "No .env file found at $INSTALL_DIR/.env"
     fi
+    # Note: The wrapper script loads .env automatically
 }
 
 stop_post() {
