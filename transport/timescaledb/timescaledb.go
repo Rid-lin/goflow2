@@ -510,7 +510,6 @@ func (d *TimescaleDBDriver) flushBatch() {
 
 	// Execute batch
 	br := conn.SendBatch(ctx, batchInsert)
-	defer br.Close()
 
 	// Check for errors
 	successCount := 0
@@ -523,9 +522,16 @@ func (d *TimescaleDBDriver) flushBatch() {
 		successCount++
 	}
 
+	// Close batch and check for errors
+	if err := br.Close(); err != nil {
+		slog.Warn("failed to close batch", "error", err)
+	}
+
 	// If some inserts failed, we could re-add them to batch
 	// For simplicity, we just log and drop them
 	if successCount < len(batch) {
+		failedCount := len(batch) - successCount
+		slog.Warn("some inserts failed", "failed", failedCount, "total", len(batch))
 		// In production, you might want to implement retry logic
 	}
 }
