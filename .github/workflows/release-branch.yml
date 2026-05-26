@@ -2,12 +2,12 @@ name: Release
 
 on:
   push:
+    branches: [ timescaledb-sourcecraft ]
     tags:
       - 'v*'
 
 env:
   # Reuse consistent image names across packaging and manifests.
-  GHCR_IMAGE: ghcr.io/${{ github.repository_owner }}/goflow2
   DOCKERHUB_IMAGE: docker.io/${{ github.repository_owner }}/goflow2
 
 jobs:
@@ -153,9 +153,6 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    - name: Log in to GHCR
-      if: matrix.package && env.DOCKER_PACKAGE == 'true'
-      run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $ --password-stdin
 
     - name: Docker package
       if: matrix.package && env.DOCKER_PACKAGE == 'true'
@@ -163,7 +160,7 @@ jobs:
       run: |
         DOCKER_PUSH_FLAG="--push"
         DOCKER_SUFFIX=-${{ matrix.goarch }} \
-        DOCKER_IMAGE_PREFIXES="${{ env.DOCKERHUB_IMAGE }} ${{ env.GHCR_IMAGE }}" \
+        DOCKER_IMAGE_PREFIXES="${{ env.DOCKERHUB_IMAGE }}" \
         DOCKER_CMD="buildx build $DOCKER_PUSH_FLAG --platform $DOCKER_PLATFORM --build-arg BIN_SOURCE=prebuilt --build-arg PREBUILT_BINARY=$PREBUILT_BINARY" \
         make docker
           
@@ -223,14 +220,11 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    - name: Log in to GHCR
-      run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $ --password-stdin
-
     - name: Publish manifests for tag
       shell: bash
       # Tag releases get a versioned manifest plus latest.
       run: |
-        images=("${{ env.DOCKERHUB_IMAGE }}" "${{ env.GHCR_IMAGE }}")
+        images=("${{ env.DOCKERHUB_IMAGE }}")
         for image in "${images[@]}"; do
           DOCKER_IMAGE="$image" DOCKER_MANIFEST_TAG="${VERSION}" make docker-manifest
           DOCKER_IMAGE="$image" DOCKER_MANIFEST_TAG=latest make docker-manifest
@@ -259,13 +253,14 @@ jobs:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
           const tag = process.env.GITHUB_REF_NAME;
+          const isPrerelease = tag.includes('-');
           const { data } = await github.rest.repos.createRelease({
             owner: context.repo.owner,
             repo: context.repo.repo,
             tag_name: tag,
             name: `Release ${tag}`,
             draft: false,
-            prerelease: false,
+            prerelease: isPrerelease,
           });
           core.setOutput('upload_url', data.upload_url);
 
