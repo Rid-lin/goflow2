@@ -8,7 +8,7 @@ on:
 
 env:
   # Reuse consistent image names across packaging and manifests.
-  DOCKERHUB_IMAGE: docker.io/${{ github.repository_owner }}/goflow2
+  DOCKERHUB_IMAGE: docker.io/vsvegner/goflow2
 
 jobs:
   test:

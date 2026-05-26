@@ -13,7 +13,7 @@ COMMIT        ?= $(shell git rev-parse HEAD)
 TAG           ?= $(shell git describe --tags --abbrev=0 HEAD)
 VERSION_PKG   ?= $(shell echo $(VERSION) | sed 's/^v//g')
 LICENSE       := BSD-3-Clause
-URL           := https://github.com/netsampler/goflow2
+URL           := https://github.com/Rid-lin/goflow2
 DESCRIPTION   := GoFlow2: Open-Source and Scalable Network Sample Collector
 DATE          :=  $(shell date +%FT%T%z)
 BUILDINFOS    ?=  ($(DATE)$(BUILDINFOSDET))
