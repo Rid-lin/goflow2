@@ -87,6 +87,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: vsvegner/act-runner:latest
+    environment: prod
     strategy:
       fail-fast: false
       matrix:
@@ -152,6 +153,7 @@ jobs:
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
+        logout: false
 
 
     - name: Docker package
@@ -204,6 +206,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: vsvegner/act-runner:latest
+    environment: prod
     needs: build
     steps:
     - name: Check out code into the Go module directory
@@ -219,6 +222,7 @@ jobs:
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
+        logout: false
 
     - name: Publish manifests for tag
       shell: bash
