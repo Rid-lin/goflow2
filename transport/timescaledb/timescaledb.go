@@ -177,61 +177,7 @@ func (d *TimescaleDBDriver) createTableIfNotExists() error {
 
 	_, err = conn.Exec(d.ctx, query)
 	if err != nil {
-		// If create_hypertable fails (not TimescaleDB), just create regular table
-		// Remove the hypertable creation part and try again
-		basicQuery := fmt.Sprintf(`
-			CREATE TABLE IF NOT EXISTS %s (
-				time_received TIMESTAMPTZ NOT NULL,
-				time_flow_start TIMESTAMPTZ,
-				time_flow_end TIMESTAMPTZ,
-				src_addr INET,
-				dst_addr INET,
-				src_port INTEGER,
-				dst_port INTEGER,
-				proto INTEGER,
-				bytes BIGINT,
-				packets BIGINT,
-				src_as INTEGER,
-				dst_as INTEGER,
-				etype INTEGER,
-				sampler_address INET,
-				sequence_num INTEGER,
-				sampling_rate BIGINT,
-				in_if INTEGER,
-				out_if INTEGER,
-				src_mac BIGINT,
-				dst_mac BIGINT,
-				src_vlan INTEGER,
-				dst_vlan INTEGER,
-				vlan_id INTEGER,
-				ip_tos INTEGER,
-				forwarding_status INTEGER,
-				ip_ttl INTEGER,
-				ip_flags INTEGER,
-				tcp_flags INTEGER,
-				icmp_type INTEGER,
-				icmp_code INTEGER,
-				ipv6_flow_label INTEGER,
-				fragment_id INTEGER,
-				fragment_offset INTEGER,
-				next_hop INET,
-				next_hop_as INTEGER,
-				src_net INTEGER,
-				dst_net INTEGER,
-				observation_domain_id INTEGER,
-				observation_point_id INTEGER,
-				flow_type INTEGER,
-				bgp_next_hop INET,
-				as_path INTEGER[],
-				mpls_label INTEGER[],
-				mpls_ttl INTEGER[],
-				bgp_communities INTEGER[]
-			);
-		`, d.tableName)
-		_, err = conn.Exec(d.ctx, basicQuery)
-		if err != nil {
-			return fmt.Errorf("create basic table: %w", err)
-		}
+		return fmt.Errorf("create hypertable: %w", err)
 	}
 
 	// Apply compression and indexes if enabled
@@ -243,7 +189,8 @@ func (d *TimescaleDBDriver) createTableIfNotExists() error {
 	// Create aggregation tables if enabled
 	if d.createAggregationTables {
 		if err := d.createAggregationTablesIfNotExists(conn); err != nil {
-			return fmt.Errorf("create aggregation tables: %w", err)
+			// Log warning but don't fail table creation — aggregation tables are optional
+			slog.Warn("failed to create aggregation tables", "error", err)
 		}
 	}
 
@@ -370,64 +317,7 @@ func (d *TimescaleDBDriver) createAggregationTablesIfNotExists(conn *pgxpool.Con
 
 	_, err := conn.Exec(d.ctx, query)
 	if err != nil {
-		// If continuous aggregate fails (not TimescaleDB or version mismatch), fallback to regular materialized views
-		basicQuery := fmt.Sprintf(`
-			CREATE OR REPLACE FUNCTION is_local_ip(ip INET) RETURNS BOOLEAN AS $$
-			BEGIN
-				RETURN ip << INET '10.0.0.0/8' OR
-					   ip << INET '172.16.0.0/12' OR
-					   ip << INET '192.168.0.0/16' OR
-					   ip << INET '127.0.0.0/8' OR
-					   ip << INET '169.254.0.0/16';
-			END;
-			$$ LANGUAGE plpgsql IMMUTABLE;
-
-			-- Create regular materialized views (not continuous)
-			CREATE MATERIALIZED VIEW IF NOT EXISTS flows_local_ip_outbound_hourly AS
-			SELECT
-				src_addr AS ip_address,
-				time_bucket('1 hour', time_received) AS hour_bucket,
-				SUM(bytes) AS bytes_out,
-				SUM(packets) AS packets_out
-			FROM %s
-			WHERE is_local_ip(src_addr)
-			GROUP BY src_addr, hour_bucket
-			WITH NO DATA;
-
-			CREATE MATERIALIZED VIEW IF NOT EXISTS flows_local_ip_inbound_hourly AS
-			SELECT
-				dst_addr AS ip_address,
-				time_bucket('1 hour', time_received) AS hour_bucket,
-				SUM(bytes) AS bytes_in,
-				SUM(packets) AS packets_in
-			FROM %s
-			WHERE is_local_ip(dst_addr)
-			GROUP BY dst_addr, hour_bucket
-			WITH NO DATA;
-
-			-- Create indexes for performance
-			CREATE UNIQUE INDEX IF NOT EXISTS flows_local_ip_outbound_hourly_idx
-			ON flows_local_ip_outbound_hourly (ip_address, hour_bucket);
-			CREATE UNIQUE INDEX IF NOT EXISTS flows_local_ip_inbound_hourly_idx
-			ON flows_local_ip_inbound_hourly (ip_address, hour_bucket);
-
-			-- Create a unified view for convenience
-			CREATE OR REPLACE VIEW flows_local_ip_hourly AS
-			SELECT
-				COALESCE(o.ip_address, i.ip_address) AS ip_address,
-				COALESCE(o.hour_bucket, i.hour_bucket) AS hour_bucket,
-				COALESCE(o.bytes_out, 0) AS bytes_out,
-				COALESCE(o.packets_out, 0) AS packets_out,
-				COALESCE(i.bytes_in, 0) AS bytes_in,
-				COALESCE(i.packets_in, 0) AS packets_in
-			FROM flows_local_ip_outbound_hourly o
-			FULL OUTER JOIN flows_local_ip_inbound_hourly i
-			ON o.ip_address = i.ip_address AND o.hour_bucket = i.hour_bucket;
-		`, d.tableName, d.tableName)
-		_, err = conn.Exec(d.ctx, basicQuery)
-		if err != nil {
-			return fmt.Errorf("create aggregation tables: %w", err)
-		}
+		return fmt.Errorf("create continuous aggregates: %w", err)
 	}
 
 	return nil
