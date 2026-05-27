@@ -1,10 +1,9 @@
-version: '3.8'
-
 services:
   timescaledb:
     image: ${TIMESCALEDB_IMAGE:-timescale/timescaledb-ha:pg18}
     container_name: goflow2-timescaledb
     restart: unless-stopped
+    user: "1000:1000"
     env_file:
       - .env  # Просто указываем путь к .env файлу
     environment:
