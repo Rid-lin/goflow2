@@ -236,14 +236,32 @@ fi
 log_info "Включение сервиса $SERVICE_NAME..."
 rc-update add "$SERVICE_NAME" default
 
+log_info "Ожидание 5 секунд перед запуском сервиса (TimescaleDB инициализируется)..."
+sleep 5
+
 log_info "Запуск сервиса $SERVICE_NAME..."
 rc-service "$SERVICE_NAME" start
 
-# Проверка состояния сервиса
-if rc-service "$SERVICE_NAME" status > /dev/null 2>&1; then
-    log_info "Сервис $SERVICE_NAME успешно запущен"
-else
-    log_warn "Сервис может не работать. Проверьте логи: rc-service $SERVICE_NAME status"
+# Проверка состояния сервиса с ретраями
+log_info "Проверка состояния сервиса $SERVICE_NAME (до 5 попыток с интервалом 10 сек)..."
+SERVICE_STARTED=false
+for i in 1 2 3 4 5; do
+    log_info "Попытка $i из 5..."
+    sleep 10
+    if rc-service "$SERVICE_NAME" status > /dev/null 2>&1; then
+        SERVICE_STARTED=true
+        log_info "Сервис $SERVICE_NAME успешно запущен"
+        break
+    fi
+    log_warn "Сервис ещё не запущен (попытка $i/5)"
+done
+
+if [ "$SERVICE_STARTED" = false ]; then
+    log_warn "Сервис $SERVICE_NAME не запустился после 5 попыток."
+    log_info "Вывод последних 50 строк лога:"
+    tail -50 "$LOG_DIR/output.log" 2>/dev/null || log_warn "Лог-файл не найден: $LOG_DIR/output.log"
+    log_info "Проверьте статус вручную: rc-service $SERVICE_NAME status"
+    log_info "Проверьте логи: tail -f $LOG_DIR/output.log"
 fi
 
 # Копирование руководства по подключению Grafana
