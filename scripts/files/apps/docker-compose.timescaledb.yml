@@ -30,7 +30,7 @@ services:
       - "${DB_PORT:-5432}:5432"
     volumes:
       - ./timescaledb-data:/home/postgres/pgdata/data
-      - ./timescaledb/init:/docker-entrypoint-initdb.d
+      - ./init:/docker-entrypoint-initdb.d
     networks:
       - goflow2-network
     healthcheck:

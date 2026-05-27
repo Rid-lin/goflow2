@@ -32,13 +32,19 @@
 
 ```bash
 # Скачайте скрипт
-wget https://raw.githubusercontent.com/Rid-lin/goflow2/refs/heads/timescaledb-sourcecraft/scripts/install-goflow2-alpine-enhanced.sh
+wget https://raw.githubusercontent.com/Rid-lin/goflow2/refs/heads/timescaledb-sourcecraft/scripts/install-goflow2-alpine-enhanced.sh 
 
 # Сделайте исполняемым
 chmod +x install-goflow2-alpine-enhanced.sh
 
 # Запустите с правами root
 sudo ./install-goflow2-alpine-enhanced.sh
+```
+
+или одной командой
+
+```bash
+wget https://raw.githubusercontent.com/Rid-lin/goflow2/refs/heads/timescaledb-sourcecraft/scripts/install-goflow2-alpine-enhanced.sh && chmod +x install-goflow2-alpine-enhanced.sh && ./install-goflow2-alpine-enhanced.sh
 ```
 
 ## Структура после установки

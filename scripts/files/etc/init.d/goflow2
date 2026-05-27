@@ -1,0 +1,29 @@
+#!/sbin/openrc-run
+
+name="goflow2"
+description="GoFlow2 NetFlow/sFlow/IPFIX collector"
+command="/opt/goflow2/goflow2-wrapper.sh"
+command_args=""
+command_user="goflow2:goflow2"
+command_background=true
+pidfile="/run/${RC_SVCNAME}.pid"
+start_stop_daemon_args="--chdir /opt/goflow2"
+output_log="/var/log/goflow2/output.log"
+error_log="/var/log/goflow2/error.log"
+
+depend() {
+    need net
+    after firewall
+}
+
+start_pre() {
+    # Проверка существования .env (опционально)
+    if [ ! -f "/opt/goflow2/.env" ]; then
+        ewarn "Файл .env не найден в /opt/goflow2/.env"
+    fi
+    # Примечание: скрипт-обертка загружает .env автоматически
+}
+
+stop_post() {
+    rm -f "$pidfile"
+}

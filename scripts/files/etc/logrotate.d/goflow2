@@ -1,0 +1,12 @@
+/var/log/goflow2/*.log {
+    daily
+    rotate 30
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 goflow2 goflow2
+    postrotate
+        rc-service goflow2 reload > /dev/null 2>&1 || true
+    endscript
+}
