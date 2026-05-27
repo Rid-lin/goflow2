@@ -129,8 +129,27 @@ if [ -z "$LATEST_VERSION" ] || [ "$LATEST_VERSION" = "null" ]; then
 fi
 log_info "Последняя версия: $LATEST_VERSION"
 
-# Формирование URL для скачивания
-DOWNLOAD_URL="https://github.com/Rid-lin/goflow2/releases/download/${LATEST_VERSION}/goflow2"
+# Определение OS для имени файла
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+case "$OS" in
+    mingw*|msys*|cygwin*)
+        OS="windows"
+        EXTENSION=".exe"
+        ;;
+    darwin)
+        OS="darwin"
+        EXTENSION=""
+        ;;
+    *)
+        OS="linux"
+        EXTENSION=""
+        ;;
+esac
+
+# Формирование URL для скачивания (имя файла: goflow2-{version}-{os}-{arch})
+VERSION_NOV="${LATEST_VERSION#v}"
+DOWNLOAD_FILENAME="goflow2-${VERSION_NOV}-${OS}-${ARCH}${EXTENSION}"
+DOWNLOAD_URL="https://github.com/Rid-lin/goflow2/releases/download/${LATEST_VERSION}/${DOWNLOAD_FILENAME}"
 log_info "URL для скачивания: $DOWNLOAD_URL"
 
 # Создание каталога установки
