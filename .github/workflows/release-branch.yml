@@ -2,7 +2,7 @@ name: Release
 
 on:
   push:
-    branches: [ timescaledb-sourcecraft ]
+    # branches: [ timescaledb-sourcecraft ]
     tags:
       - 'v*'
 
