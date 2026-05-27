@@ -263,7 +263,6 @@ services:
     image: ${TIMESCALEDB_IMAGE:-timescale/timescaledb-ha:pg18}
     container_name: goflow2-timescaledb
     restart: unless-stopped
-    user: "1000:1000"
     env_file:
       - .env
     environment:
@@ -352,6 +351,15 @@ GRAFANA_USER_PASSWORD=grafana_secure_password
 EOF
     log_warn "Создан файл .env с настройками по умолчанию. Пожалуйста, измените пароли!"
 fi
+
+# Подготовка директории для данных TimescaleDB
+# Контейнер работает от пользователя postgres (UID 1000)
+DATA_DIR="$INSTALL_DIR/timescaledb-data"
+if [ ! -d "$DATA_DIR" ]; then
+    mkdir -p "$DATA_DIR"
+fi
+chown 1000:1000 "$DATA_DIR"
+log_info "Директория данных TimescaleDB подготовлена: $DATA_DIR"
 
 # Запуск TimescaleDB
 log_info "Запуск TimescaleDB контейнера..."
