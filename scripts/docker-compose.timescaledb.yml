@@ -1,19 +1,35 @@
 services:
   timescaledb:
-    image: ${TIMESCALEDB_IMAGE:-timescale/timescaledb:latest-pg16}
+    image: ${TIMESCALEDB_IMAGE:-timescale/timescaledb-ha:pg18}
     container_name: goflow2-timescaledb
     restart: unless-stopped
+    env_file:
+      - .env  # Просто указываем путь к .env файлу
     environment:
+      # Переопределяем только то, что нужно для PostgreSQL
       POSTGRES_DB: ${DB_NAME:-goflow2}
       POSTGRES_USER: ${DB_ADMIN_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_ADMIN_PASSWORD:-password}
-      # TimescaleDB specific tuning
       TIMESCALEDB_TELEMETRY: ${TIMESCALEDB_TELEMETRY:-off}
+      # Все переменные из .env для скриптов инициализации
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_ADMIN_USER: ${DB_ADMIN_USER}
+      DB_ADMIN_PASSWORD: ${DB_ADMIN_PASSWORD}
+      APP_USER: ${APP_USER}
+      APP_PASSWORD: ${APP_PASSWORD}
+      APP_SCHEMA: ${APP_SCHEMA}
+      GRAFANA_USER: ${GRAFANA_USER}
+      GRAFANA_USER_PASSWORD: ${GRAFANA_USER_PASSWORD}
+      TIMESCALEDB_TELEMETRY: ${TIMESCALEDB_TELEMETRY:-off}
+      TIMESCALEDB_MAX_CONNECTIONS: ${TIMESCALEDB_MAX_CONNECTIONS:-200}
+      TIMESCALEDB_SHARED_BUFFERS: ${TIMESCALEDB_SHARED_BUFFERS:-256MB}
+
     ports:
       - "${DB_PORT:-5432}:5432"
     volumes:
-      - timescaledb-data:/var/lib/postgresql/data
-      # Optional: mount initialization scripts
+      - ./timescaledb-data:/home/postgres/pgdata/data
       - ./timescaledb/init:/docker-entrypoint-initdb.d
     networks:
       - goflow2-network
@@ -23,18 +39,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    # Performance tuning for TimescaleDB
     command: >
       postgres
       -c shared_preload_libraries=timescaledb
       -c max_connections=${TIMESCALEDB_MAX_CONNECTIONS:-200}
       -c shared_buffers=${TIMESCALEDB_SHARED_BUFFERS:-256MB}
-      -c effective_cache_size=1GB
-      -c maintenance_work_mem=64MB
-      -c checkpoint_completion_target=0.9
-      -c wal_buffers=16MB
-      -c default_statistics_target=100
-
+      
   # Optional: pgAdmin for database management
   pgadmin:
     image: ${PGADMIN_IMAGE:-dpage/pgadmin4:latest}
@@ -46,17 +56,11 @@ services:
     ports:
       - "${PGADMIN_PORT:-8080}:80"
     volumes:
-      - pgadmin-data:/var/lib/pgadmin
+      - ./pgadmin-data:/var/lib/pgadmin
     networks:
       - goflow2-network
     depends_on:
       - timescaledb
-
-volumes:
-  timescaledb-data:
-    driver: local
-  pgadmin-data:
-    driver: local
 
 networks:
   goflow2-network:

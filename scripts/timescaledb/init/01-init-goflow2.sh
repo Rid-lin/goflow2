@@ -1,54 +1,54 @@
 #!/bin/bash
-# Generate initialization SQL with environment variables
+# 01-init-goflow2.sh
+# Инициализация базы данных GoFlow2
+# Выполняется автоматически при первом запуске контейнера TimescaleDB
+# Использует переменные окружения, переданные через docker-compose
 
-set -a
-source /opt/goflow2/scripts/.env 2>/dev/null || true
-set +a
+set -e
 
-# Set defaults if not defined
-DB_NAME=${DB_NAME:-goflow2}
-APP_USER=${APP_USER:-goflow2}
-APP_PASSWORD=${APP_PASSWORD:-goflow2password}
-APP_SCHEMA=${APP_SCHEMA:-goflow2}
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+    -- Создание пользователя приложения
+    DO \$\$
+    BEGIN
+        IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '${APP_USER}') THEN
+            EXECUTE format('CREATE USER %I WITH PASSWORD %L', '${APP_USER}', '${APP_PASSWORD}');
+        END IF;
+    END
+    \$\$;
 
-cat << EOF
--- Initialize GoFlow2 database
--- This script runs automatically when the TimescaleDB container starts
--- Generated with environment variables:
--- DB_NAME=$DB_NAME
--- APP_USER=$APP_USER
--- APP_SCHEMA=$APP_SCHEMA
+    -- Создание схемы приложения
+    CREATE SCHEMA IF NOT EXISTS ${APP_SCHEMA};
 
--- Create application user if it doesn't exist
-DO \$\$
-BEGIN
-    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '$APP_USER') THEN
-        CREATE USER $APP_USER WITH PASSWORD '$APP_PASSWORD';
-    END IF;
-END
-\$\$;
+    -- Права для пользователя приложения
+    GRANT USAGE ON SCHEMA ${APP_SCHEMA} TO ${APP_USER};
+    GRANT CREATE ON SCHEMA ${APP_SCHEMA} TO ${APP_USER};
+    GRANT ALL ON SCHEMA ${APP_SCHEMA} TO ${APP_USER};
 
--- Create schema for application data
-CREATE SCHEMA IF NOT EXISTS $APP_SCHEMA;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA ${APP_SCHEMA}
+        GRANT ALL ON TABLES TO ${APP_USER};
+    ALTER DEFAULT PRIVILEGES IN SCHEMA ${APP_SCHEMA}
+        GRANT ALL ON SEQUENCES TO ${APP_USER};
+    ALTER DEFAULT PRIVILEGES IN SCHEMA ${APP_SCHEMA}
+        GRANT ALL ON FUNCTIONS TO ${APP_USER};
 
--- Grant permissions to application user
-GRANT USAGE ON SCHEMA $APP_SCHEMA TO $APP_USER;
-GRANT CREATE ON SCHEMA $APP_SCHEMA TO $APP_USER;
+    GRANT CONNECT ON DATABASE ${DB_NAME} TO ${APP_USER};
+    ALTER USER ${APP_USER} SET search_path TO ${APP_SCHEMA}, public;
 
--- Set default privileges for future objects
-ALTER DEFAULT PRIVILEGES IN SCHEMA $APP_SCHEMA 
-    GRANT ALL ON TABLES TO $APP_USER;
-ALTER DEFAULT PRIVILEGES IN SCHEMA $APP_SCHEMA 
-    GRANT ALL ON SEQUENCES TO $APP_USER;
-ALTER DEFAULT PRIVILEGES IN SCHEMA $APP_SCHEMA 
-    GRANT ALL ON FUNCTIONS TO $APP_USER;
+    -- Создание пользователя Grafana (только чтение)
+    DO \$\$
+    BEGIN
+        IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '${GRAFANA_USER}') THEN
+            EXECUTE format('CREATE USER %I WITH PASSWORD %L', '${GRAFANA_USER}', '${GRAFANA_USER_PASSWORD}');
+        END IF;
+    END
+    \$\$;
 
--- Grant connect to database
-GRANT CONNECT ON DATABASE $DB_NAME TO $APP_USER;
+    GRANT CONNECT ON DATABASE ${DB_NAME} TO ${GRAFANA_USER};
+    GRANT USAGE ON SCHEMA ${APP_SCHEMA} TO ${GRAFANA_USER};
+    GRANT SELECT ON ALL TABLES IN SCHEMA ${APP_SCHEMA} TO ${GRAFANA_USER};
+    ALTER DEFAULT PRIVILEGES IN SCHEMA ${APP_SCHEMA}
+        GRANT SELECT ON TABLES TO ${GRAFANA_USER};
 
--- Set search path for application user
-ALTER USER $APP_USER SET search_path TO $APP_SCHEMA, public;
-
--- Create extension for TimescaleDB (if not already created)
-CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
-EOF
+    -- Включение расширения TimescaleDB
+    CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
+EOSQL

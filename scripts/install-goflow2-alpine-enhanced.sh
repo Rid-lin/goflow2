@@ -263,15 +263,33 @@ services:
     image: ${TIMESCALEDB_IMAGE:-timescale/timescaledb-ha:pg18}
     container_name: goflow2-timescaledb
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
+      # PostgreSQL credentials
       POSTGRES_DB: ${DB_NAME:-goflow2}
       POSTGRES_USER: ${DB_ADMIN_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_ADMIN_PASSWORD:-password}
+      # All variables from .env for init scripts
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_ADMIN_USER: ${DB_ADMIN_USER}
+      DB_ADMIN_PASSWORD: ${DB_ADMIN_PASSWORD}
+      APP_USER: ${APP_USER}
+      APP_PASSWORD: ${APP_PASSWORD}
+      APP_SCHEMA: ${APP_SCHEMA}
+      GRAFANA_USER: ${GRAFANA_USER}
+      GRAFANA_USER_PASSWORD: ${GRAFANA_USER_PASSWORD}
       TIMESCALEDB_TELEMETRY: ${TIMESCALEDB_TELEMETRY:-off}
+      TIMESCALEDB_MAX_CONNECTIONS: ${TIMESCALEDB_MAX_CONNECTIONS:-200}
+      TIMESCALEDB_SHARED_BUFFERS: ${TIMESCALEDB_SHARED_BUFFERS:-256MB}
+
     ports:
       - "${DB_PORT:-5432}:5432"
     volumes:
-      - ./timescaledb-data:/var/lib/postgresql/data
+      - ./timescaledb-data:/home/postgres/pgdata/data
+      - ./init:/docker-entrypoint-initdb.d
     networks:
       - goflow2-network
     healthcheck:
@@ -293,6 +311,19 @@ EOF
     log_info "Создан новый docker-compose.timescaledb.yml"
 fi
 
+# Копирование init-скриптов для TimescaleDB
+INIT_SRC="$SCRIPT_DIR/timescaledb/init"
+INIT_DST="$INSTALL_DIR/init"
+if [ -d "$INIT_SRC" ]; then
+    log_info "Копирование init-скриптов из $INIT_SRC в $INIT_DST..."
+    mkdir -p "$INIT_DST"
+    cp -r "$INIT_SRC/"* "$INIT_DST/"
+    chown -R "$USER_NAME:$GROUP_NAME" "$INIT_DST"
+    log_info "Init-скрипты скопированы"
+else
+    log_warn "Каталог init-скриптов не найден: $INIT_SRC"
+fi
+
 # Создание .env файла для TimescaleDB, если не существует
 if [ ! -f "$INSTALL_DIR/.env" ]; then
     cat > "$INSTALL_DIR/.env" <<'EOF'
@@ -312,6 +343,11 @@ GOFLOW2_FORMAT=bin
 DB_HOST=localhost
 APP_USER=goflow2
 APP_PASSWORD=goflow2_password
+APP_SCHEMA=goflow2
+
+# Пользователь Grafana (только чтение)
+GRAFANA_USER=grafana_reader
+GRAFANA_USER_PASSWORD=grafana_secure_password
 EOF
     log_warn "Создан файл .env с настройками по умолчанию. Пожалуйста, измените пароли!"
 fi
