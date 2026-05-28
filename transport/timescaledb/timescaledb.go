@@ -223,7 +223,7 @@ func (d *TimescaleDBDriver) applyCompressionAndIndexes(conn *pgxpool.Conn) error
 	// Convert duration to PostgreSQL interval
 	intervalSeconds := int64(d.compressionAfter.Seconds())
 	policyQuery := fmt.Sprintf(
-		`SELECT add_compression_policy('%s', INTERVAL '%d seconds');`,
+		`SELECT add_compression_policy('%s', INTERVAL '%d seconds', if_not_exists => true);`,
 		d.tableName, intervalSeconds)
 	_, err = conn.Exec(d.ctx, policyQuery)
 	if err != nil {
@@ -292,13 +292,15 @@ func (d *TimescaleDBDriver) createAggregationTablesIfNotExists(conn *pgxpool.Con
 		SELECT add_continuous_aggregate_policy('flows_local_ip_outbound_hourly',
 			start_offset => INTERVAL '365 days',
 			end_offset => INTERVAL '1 hour',
-			schedule_interval => INTERVAL '1 hour'
+			schedule_interval => INTERVAL '1 hour',
+			if_not_exists => true
 		);
 
 		SELECT add_continuous_aggregate_policy('flows_local_ip_inbound_hourly',
 			start_offset => INTERVAL '365 days',
 			end_offset => INTERVAL '1 hour',
-			schedule_interval => INTERVAL '1 hour'
+			schedule_interval => INTERVAL '1 hour',
+			if_not_exists => true
 		);
 
 		-- Create a unified view for convenience
