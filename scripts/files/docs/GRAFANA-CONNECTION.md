@@ -37,6 +37,53 @@ GROUP BY time
 ORDER BY time DESC
 ```
 
+Почасовой трафик разделённый по IP-адресам
+```sql
+WITH params AS (
+    SELECT '${timezone}'::text AS tz,
+           date_trunc('day', NOW() AT TIME ZONE '${timezone}') AT TIME ZONE '${timezone}' AS day_start
+),
+converted AS (
+    SELECT
+        ip_address,
+        bytes_in + bytes_out AS bytes,
+        (hour_bucket AT TIME ZONE p.tz)::timestamp AS local_ts
+    FROM flow.flows_local_ip_hourly, params p
+    WHERE hour_bucket >= p.day_start
+      AND hour_bucket <  p.day_start + interval '1 day'
+)
+SELECT
+    ip_address,
+    SUM(bytes) AS total_daily_bytes,
+    SUM(CASE WHEN EXTRACT(HOUR FROM local_ts) = 0  THEN bytes ELSE 0 END) AS h00,
+    SUM(CASE WHEN EXTRACT(HOUR FROM local_ts) = 1  THEN bytes ELSE 0 END) AS h01,
+    SUM(CASE WHEN EXTRACT(HOUR FROM local_ts) = 2  THEN bytes ELSE 0 END) AS h02,
+    SUM(CASE WHEN EXTRACT(HOUR FROM local_ts) = 3  THEN bytes ELSE 0 END) AS h03,
+    SUM(CASE WHEN EXTRACT(HOUR FROM local_ts) = 4  THEN bytes ELSE 0 END) AS h04,
+    SUM(CASE WHEN EXTRACT(HOUR FROM local_ts) = 5  THEN bytes ELSE 0 END) AS h05,
+    SUM(CASE WHEN EXTRACT(HOUR FROM local_ts) = 6  THEN bytes ELSE 0 END) AS h06,
+    SUM(CASE WHEN EXTRACT(HOUR FROM local_ts) = 7  THEN bytes ELSE 0 END) AS h07,
+    SUM(CASE WHEN EXTRACT(HOUR FROM local_ts) = 8  THEN bytes ELSE 0 END) AS h08,
+    SUM(CASE WHEN EXTRACT(HOUR FROM local_ts) = 9  THEN bytes ELSE 0 END) AS h09,
+    SUM(CASE WHEN EXTRACT(HOUR FROM local_ts) = 10 THEN bytes ELSE 0 END) AS h10,
+    SUM(CASE WHEN EXTRACT(HOUR FROM local_ts) = 11 THEN bytes ELSE 0 END) AS h11,
+    SUM(CASE WHEN EXTRACT(HOUR FROM local_ts) = 12 THEN bytes ELSE 0 END) AS h12,
+    SUM(CASE WHEN EXTRACT(HOUR FROM local_ts) = 13 THEN bytes ELSE 0 END) AS h13,
+    SUM(CASE WHEN EXTRACT(HOUR FROM local_ts) = 14 THEN bytes ELSE 0 END) AS h14,
+    SUM(CASE WHEN EXTRACT(HOUR FROM local_ts) = 15 THEN bytes ELSE 0 END) AS h15,
+    SUM(CASE WHEN EXTRACT(HOUR FROM local_ts) = 16 THEN bytes ELSE 0 END) AS h16,
+    SUM(CASE WHEN EXTRACT(HOUR FROM local_ts) = 17 THEN bytes ELSE 0 END) AS h17,
+    SUM(CASE WHEN EXTRACT(HOUR FROM local_ts) = 18 THEN bytes ELSE 0 END) AS h18,
+    SUM(CASE WHEN EXTRACT(HOUR FROM local_ts) = 19 THEN bytes ELSE 0 END) AS h19,
+    SUM(CASE WHEN EXTRACT(HOUR FROM local_ts) = 20 THEN bytes ELSE 0 END) AS h20,
+    SUM(CASE WHEN EXTRACT(HOUR FROM local_ts) = 21 THEN bytes ELSE 0 END) AS h21,
+    SUM(CASE WHEN EXTRACT(HOUR FROM local_ts) = 22 THEN bytes ELSE 0 END) AS h22,
+    SUM(CASE WHEN EXTRACT(HOUR FROM local_ts) = 23 THEN bytes ELSE 0 END) AS h23
+FROM converted
+GROUP BY ip_address
+ORDER BY total_daily_bytes DESC;
+```
+
 ## Дополнительные настройки
 
 ### Если используется pgAdmin
