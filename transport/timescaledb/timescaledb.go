@@ -264,7 +264,10 @@ func (d *TimescaleDBDriver) createAggregationTablesIfNotExists(conn *pgxpool.Con
 
 		-- Create continuous aggregate for outbound traffic (source IP)
 		CREATE MATERIALIZED VIEW IF NOT EXISTS flows_local_ip_outbound_hourly
-		WITH (timescaledb.continuous) AS
+		WITH (
+			timescaledb.continuous,
+			timescaledb.materialized_only = false
+		) AS
 		SELECT
 			src_addr AS ip_address,
 			time_bucket('1 hour', time_received) AS hour_bucket,
@@ -277,7 +280,10 @@ func (d *TimescaleDBDriver) createAggregationTablesIfNotExists(conn *pgxpool.Con
 
 		-- Create continuous aggregate for inbound traffic (destination IP)
 		CREATE MATERIALIZED VIEW IF NOT EXISTS flows_local_ip_inbound_hourly
-		WITH (timescaledb.continuous) AS
+		WITH (
+			timescaledb.continuous,
+			timescaledb.materialized_only = false
+		) AS
 		SELECT
 			dst_addr AS ip_address,
 			time_bucket('1 hour', time_received) AS hour_bucket,
@@ -291,14 +297,14 @@ func (d *TimescaleDBDriver) createAggregationTablesIfNotExists(conn *pgxpool.Con
 		-- Add continuous aggregate policies (refresh every hour, keep last 24 hours)
 		SELECT add_continuous_aggregate_policy('flows_local_ip_outbound_hourly',
 			start_offset => INTERVAL '365 days',
-			end_offset => INTERVAL '1 hour',
+			end_offset => INTERVAL '30 minute',
 			schedule_interval => INTERVAL '1 hour',
 			if_not_exists => true
 		);
 
 		SELECT add_continuous_aggregate_policy('flows_local_ip_inbound_hourly',
 			start_offset => INTERVAL '365 days',
-			end_offset => INTERVAL '1 hour',
+			end_offset => INTERVAL '30 minute',
 			schedule_interval => INTERVAL '1 hour',
 			if_not_exists => true
 		);
